@@ -62,6 +62,7 @@ class MongoDB:
         self.admin_list = {}  # Cache admin lists
         self.admin_cache_time = {}  # Track cache freshness
         self.active_calls = {}
+        self.autoleave = {}  # Cache per-chat auto-leave settings
         self.blacklisted = []
         self.notified = []
         self.cache = self.db.cache
@@ -202,23 +203,11 @@ class MongoDB:
         return tune.clients[self.assistant[chat_id] - 1]
 
     async def get_client(self, chat_id: int):
-        if chat_id not in self.assistant:
-            await self.get_assistant(chat_id)
-        
-        # make sure the assigned assistant is still available
-        if self.assistant[chat_id] > len(userbot.clients):
-            await self.set_assistant(chat_id)
-        
-        # get the assistants that are currently running
-        available_clients = {}
-        if hasattr(userbot, 'one') and userbot.one in userbot.clients:
-            available_clients[1] = userbot.one
-        if hasattr(userbot, 'two') and userbot.two in userbot.clients:
-            available_clients[2] = userbot.two
-        if hasattr(userbot, 'three') and userbot.three in userbot.clients:
-            available_clients[3] = userbot.three
-        
-        return available_clients.get(self.assistant[chat_id])
+        # get_assistant makes sure the assigned number is valid.
+        # the number indexes the list of started assistants (same order as
+        # tune.clients), not the SESSION1/2/3 slot, so both stay in sync.
+        await self.get_assistant(chat_id)
+        return userbot.clients[self.assistant[chat_id] - 1]
 
     # BLACKLIST METHODS
     async def add_blacklist(self, chat_id: int) -> None:
@@ -331,13 +320,18 @@ class MongoDB:
     # AUTO LEAVE METHODS
     async def get_autoleave(self, chat_id: int) -> bool:
 
-        # Get auto-leave status for a chat. Default is False
-        doc = await self.cache.find_one({"_id": f"autoleave_{chat_id}"})
-        return doc.get("enabled", False) if doc else False
+        # Get auto-leave status for a chat. Defaults to the global AUTO_LEAVE config
+        if chat_id not in self.autoleave:
+            doc = await self.cache.find_one({"_id": f"autoleave_{chat_id}"})
+            self.autoleave[chat_id] = (
+                doc.get("enabled", config.AUTO_LEAVE) if doc else config.AUTO_LEAVE
+            )
+        return self.autoleave[chat_id]
 
     async def set_autoleave(self, chat_id: int, enabled: bool) -> None:
 
         # Enable or disable auto-leave for a chat
+        self.autoleave[chat_id] = enabled
         await self.cache.update_one(
             {"_id": f"autoleave_{chat_id}"},
             {"$set": {"enabled": enabled}},

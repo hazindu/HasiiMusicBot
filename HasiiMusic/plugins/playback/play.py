@@ -191,7 +191,9 @@ async def play_hndlr(
             return
 
     elif len(m.command) >= 2:
-        query = " ".join(m.command[1:])
+        # Drop the -f (force) flag so it isn't part of the search
+        args = m.command[2:] if m.command[1] == "-f" else m.command[1:]
+        query = " ".join(args)
         file = await yt.search(query, sent.id)
         if not file:
             await safe_edit(

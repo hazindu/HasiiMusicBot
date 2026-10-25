@@ -57,7 +57,8 @@ class Telegram:
         is_video = bool(msg.video) or (msg.document and getattr(msg.document, "mime_type", "").startswith("video/"))
         # Unique file identifier
         file_id = getattr(media, "file_unique_id", None)
-        file_ext = getattr(media, "file_name", "").split(
+        # file_name can exist but be None (e.g. audio/video sent without a name)
+        file_ext = (getattr(media, "file_name", None) or "").split(
             ".")[-1]  # File extension
         file_size = getattr(media, "file_size", 0)  # File size in bytes
         file_title = getattr(

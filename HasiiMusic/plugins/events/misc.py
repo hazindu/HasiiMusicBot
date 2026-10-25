@@ -11,7 +11,7 @@ import time
 import pyrogram
 from pyrogram import enums, filters, types
 
-from HasiiMusic import tune, app, config, db, lang, logger, queue, tasks, userbot, yt
+from HasiiMusic import tune, app, db, lang, logger, queue, tasks, userbot, yt
 from HasiiMusic.helpers import buttons
 
 
@@ -163,8 +163,8 @@ async def vc_watcher(sleep=15):
         
         for chat_id in list(db.active_calls):
             try:
-                # Check if auto-leave is enabled globally
-                if not config.AUTO_LEAVE:
+                # Per-chat /autoleave setting, falls back to the global AUTO_LEAVE
+                if not await db.get_autoleave(chat_id):
                     alone_times.pop(chat_id, None)
                     continue
                 
@@ -185,7 +185,7 @@ async def vc_watcher(sleep=15):
                     if chat_id not in alone_times:
                         alone_times[chat_id] = current_time
                     else:
-                        # Check if alone for 5 minutes
+                        # Check if alone for LEAVE_TIMEOUT
                         alone_duration = current_time - alone_times[chat_id]
                         if alone_duration >= LEAVE_TIMEOUT:
                             _lang = await lang.get_lang(chat_id)

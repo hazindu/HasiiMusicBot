@@ -34,10 +34,11 @@ async def _sudo(_, m: types.Message):
     else:
         if user.id not in app.sudoers:
             return await m.reply_text(m.lang["sudo_not"].format(user.mention))
+        if user.id == app.owner:
+            return await m.reply_text("<blockquote>❌ ᴛʜᴇ ᴏᴡɴᴇʀ ᴄᴀɴ'ᴛ ʙᴇ ʀᴇᴍᴏᴠᴇᴅ ꜰʀᴏᴍ ꜱᴜᴅᴏ.</blockquote>")
 
         app.sudoers.discard(user.id)
-        app.sudo_filter.update([])  # Reset filter
-        app.sudo_filter.update(app.sudoers)  # Rebuild with remaining users
+        app.sudo_filter.discard(user.id)  # filters.user is a set, so remove directly
         await db.del_sudo(user.id)
         await m.reply_text(m.lang["sudo_removed"].format(user.mention))
 
