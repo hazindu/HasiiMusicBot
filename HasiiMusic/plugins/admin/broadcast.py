@@ -67,19 +67,20 @@ async def broadcast_message(_, message: types.Message) -> None:
 
     # Set broadcasting flag
     broadcasting = True
-    sent = await message.reply_text(message.lang["gcast_start"])
+    try:
+        sent = await message.reply_text(message.lang["gcast_start"])
 
-    # Log broadcast initiation
-    await _log_broadcast_start(message)
-    await asyncio.sleep(5)
+        # Log broadcast initiation
+        await _log_broadcast_start(message)
+        await asyncio.sleep(5)
 
-    # Perform the broadcast (supports text and media messages)
-    success_groups, success_users, failed_chats = await _send_broadcast(
-        broadcast_text, groups, users, sent, media_message, flags, message.lang, media_group
-    )
-
-    # Reset broadcasting flag
-    broadcasting = False
+        # Perform the broadcast (supports text and media messages)
+        success_groups, success_users, failed_chats = await _send_broadcast(
+            broadcast_text, groups, users, sent, media_message, flags, message.lang, media_group
+        )
+    finally:
+        # Always reset the flag, even if something above raised
+        broadcasting = False
 
     # Send completion message
     await _send_broadcast_completion(

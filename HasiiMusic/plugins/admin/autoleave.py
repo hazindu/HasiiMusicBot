@@ -2,7 +2,7 @@
 # autoleave.py - Auto-Leave
 # ==============================================================================
 # Sudo command to toggle the auto-leave feature on or off. 
-# If on, the assistant drops out of VC after 5 minutes of inactivity.
+# If on, the assistant drops out of VC after 20 minutes of inactivity.
 # ==============================================================================
 
 from pyrogram import filters
@@ -33,7 +33,7 @@ async def autoleave_command(_, m: Message) -> None:
             "<blockquote><b>ᴜꜱᴀɢᴇ:</b>\n"
             "• `/autoleave enable` - ᴇɴᴀʙʟᴇ ᴀᴜᴛᴏ ʟᴇᴀᴠᴇ\n"
             "• `/autoleave disable` - ᴅɪꜱᴀʙʟᴇ ᴀᴜᴛᴏ ʟᴇᴀᴠᴇ</blockquote>\n\n"
-            "<blockquote><i>ᴡʜᴇɴ ᴇɴᴀʙʟᴇᴅ, ᴀꜱꜱɪꜱᴛᴀɴᴛ ᴡɪʟʟ ʟᴇᴀᴠᴇ ᴠᴏɪᴄᴇ ᴄʜᴀᴛ ᴀꜰᴛᴇʀ 5 ᴍɪɴᴜᴛᴇꜱ "
+            "<blockquote><i>ᴡʜᴇɴ ᴇɴᴀʙʟᴇᴅ, ᴀꜱꜱɪꜱᴛᴀɴᴛ ᴡɪʟʟ ʟᴇᴀᴠᴇ ᴠᴏɪᴄᴇ ᴄʜᴀᴛ ᴀꜰᴛᴇʀ 20 ᴍɪɴᴜᴛᴇꜱ "
             "ɪꜰ ɴᴏ ᴜꜱᴇʀꜱ ᴀʀᴇ ʟɪꜱᴛᴇɴɪɴɢ.</i></blockquote>"
         )
     
@@ -43,7 +43,7 @@ async def autoleave_command(_, m: Message) -> None:
         await db.set_autoleave(m.chat.id, True)
         await m.reply_text(
             "✅ <blockquote>ᴀᴜᴛᴏ ʟᴇᴀᴠᴇ ᴇɴᴀʙʟᴇᴅ!</blockquote>\n\n"
-            "<blockquote>ᴀꜱꜱɪꜱᴛᴀɴᴛ ᴡɪʟʟ ʟᴇᴀᴠᴇ ᴠᴏɪᴄᴇ ᴄʜᴀᴛ ᴀꜰᴛᴇʀ <b>5 ᴍɪɴᴜᴛᴇꜱ</b> "
+            "<blockquote>ᴀꜱꜱɪꜱᴛᴀɴᴛ ᴡɪʟʟ ʟᴇᴀᴠᴇ ᴠᴏɪᴄᴇ ᴄʜᴀᴛ ᴀꜰᴛᴇʀ <b>20 ᴍɪɴᴜᴛᴇꜱ</b> "
             "ɪꜰ ɴᴏ ᴜꜱᴇʀꜱ ᴀʀᴇ ʟɪꜱᴛᴇɴɪɴɢ.</blockquote>"
         )
     elif subcommand == "disable":

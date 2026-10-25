@@ -91,7 +91,8 @@ async def tag_admins(client, message: types.Message):
 
         # Send the reply
         try:
-            await message.reply_text(reply_msg, disable_web_page_preview=True)
+            # link previews are already disabled globally on the Bot client
+            await message.reply_text(reply_msg)
         except Exception as e:
             await message.reply_text(
                 "<blockquote>❌ Failed to send admin notification.</blockquote>"

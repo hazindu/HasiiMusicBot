@@ -40,7 +40,7 @@ async def list_bots(client, message: Message):
         response += "<blockquote>" + "\n".join(bot_list) + "</blockquote>"
         response += message.lang["bots_total"].format(bot_count)
         
-        await status_msg.edit_text(response, disable_web_page_preview=True, parse_mode=ParseMode.HTML)
+        await status_msg.edit_text(response, parse_mode=ParseMode.HTML)
         
     except Exception as e:
         if "FLOOD_WAIT" not in str(e):

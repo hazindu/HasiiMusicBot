@@ -8,7 +8,7 @@ import asyncio
 import yt_dlp
 from pyrogram import types
 
-from HasiiMusic import app, yt
+from HasiiMusic import app, config, yt
 from HasiiMusic.helpers import buttons, utils
 
 

@@ -9,6 +9,8 @@
 
 import os
 import random
+from urllib.parse import urlparse
+
 import aiohttp
 from HasiiMusic import logger
 
@@ -32,6 +34,26 @@ class CookieManager:
             return None
         return f"HasiiMusic/cookies/{random.choice(self.cookies)}"
 
+    @staticmethod
+    def raw_url(url: str) -> str:
+        # Convert a paste link into the URL that serves its raw content
+        parsed = urlparse(url if "://" in url else f"https://{url}")
+        host = parsed.netloc.lower().removeprefix("www.")
+        parts = [p for p in parsed.path.split("/") if p]
+        if not parts:
+            return url
+
+        if host in ("batbin.me", "pastebin.com"):
+            # batbin.me/<id> or batbin.me/raw/<id>
+            return f"https://{host}/raw/{parts[-1]}"
+        if host == "paste.ee":
+            # paste.ee/p/<id> or paste.ee/r/<id>
+            return f"https://paste.ee/r/{parts[-1]}"
+        if host == "rentry.co":
+            # rentry.co/<id> or rentry.co/<id>/raw
+            return f"https://rentry.co/{parts[0]}/raw"
+        return url
+
     async def save_cookies(self, urls: list[str]) -> None:
         logger.info("🍪 Saving cookies from urls...")
         saved_count = 0
@@ -39,7 +61,7 @@ class CookieManager:
         for url in urls:
             try:
                 path = f"HasiiMusic/cookies/cookie{random.randint(10000, 99999)}.txt"
-                link = url.replace("me/", "me/raw/")
+                link = self.raw_url(url)
                 async with aiohttp.ClientSession() as session:
                     async with session.get(link) as resp:
                         if resp.status != 200:

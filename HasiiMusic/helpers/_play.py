@@ -45,7 +45,7 @@ def checkUB(play):
 
         command = m.command[0].lower()
         force = command.endswith("force") or (
-            len(m.command) > 1 and "-f" in m.command[1]
+            len(m.command) > 1 and m.command[1] == "-f"
         )
 
         video_requested = command.startswith("v")
