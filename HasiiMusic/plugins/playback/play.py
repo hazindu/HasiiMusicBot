@@ -222,8 +222,12 @@ async def play_hndlr(
         await utils.play_log(m, file.title, file.duration)
 
     file.user = mention
+    file.requester_id = m.from_user.id
+    for track in tracks:
+        track.requester_id = m.from_user.id
     if force:
-        queue.force_add(chat_id, file)
+        async with tune.get_lock(chat_id):
+            queue.force_add(chat_id, file)
     else:
         position = queue.add(chat_id, file)  # Returns 0-based index
 

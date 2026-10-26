@@ -14,26 +14,32 @@ import asyncio
 import re
 from pyrogram import errors
 from HasiiMusic import app, config, db, lang, logger, preload, queue, yt
+from HasiiMusic.helpers._requester import ensure_current_track
 
 class CallQueue:
     def __init__(self, controller):
         self.controller = controller
 
-    async def replay(self, chat_id: int) -> None:
-        try:
-            if not await db.get_call(chat_id):
-                return
+    async def replay(self, chat_id: int, *, expected_media=None) -> None:
+        async with self.controller.get_lock(chat_id):
+            if expected_media is not None:
+                ensure_current_track(queue.get_current(chat_id), expected_media)
+            try:
+                if not await db.get_call(chat_id):
+                    return
 
-            media = queue.get_current(chat_id)
-            _lang = await lang.get_lang(chat_id)
-            msg = await app.send_message(chat_id=chat_id, text=_lang["play_again"])
-            await self.controller.play_media(chat_id, msg, media)
-        except Exception as e:
-            logger.error(f"Error in replay for {chat_id}: {e}", exc_info=True)
+                media = queue.get_current(chat_id)
+                _lang = await lang.get_lang(chat_id)
+                msg = await app.send_message(chat_id=chat_id, text=_lang["play_again"])
+                await self.controller._player._play_media_impl(chat_id, msg, media)
+            except Exception as e:
+                logger.error(f"Error in replay for {chat_id}: {e}", exc_info=True)
 
-    async def play_next(self, chat_id: int, expected_index: int = None) -> None:
+    async def play_next(self, chat_id: int, expected_index: int = None, *, expected_media=None) -> None:
         lock = self.controller.get_lock(chat_id)
         async with lock:
+            if expected_media is not None:
+                ensure_current_track(queue.get_current(chat_id), expected_media)
             self.controller._pending_transitions.discard(chat_id)
             if expected_index is not None and self.controller._track_index.get(chat_id, 0) != expected_index:
                 logger.info(f"Skipping stale play_next for {chat_id}")
@@ -42,9 +48,11 @@ class CallQueue:
             self.controller._track_index[chat_id] = self.controller._track_index.get(chat_id, 0) + 1
             await self._play_next_impl(chat_id)
 
-    async def play_previous(self, chat_id: int) -> bool:
+    async def play_previous(self, chat_id: int, *, expected_media=None) -> bool:
         lock = self.controller.get_lock(chat_id)
         async with lock:
+            if expected_media is not None:
+                ensure_current_track(queue.get_current(chat_id), expected_media)
             self.controller._pending_transitions.discard(chat_id)
             self.controller._track_index[chat_id] = self.controller._track_index.get(chat_id, 0) + 1
             
@@ -252,6 +260,7 @@ class CallQueue:
                             user=media.user,
                             offset=next_offset,
                             limit=batch_limit,
+                            requester_id=getattr(media, "requester_id", None),
                         )
                     )
         except Exception as e:
@@ -263,7 +272,8 @@ class CallQueue:
                 pass
 
     async def _fetch_next_playlist_batch(
-        self, chat_id: int, playlist_url: str, user: str, offset: int, limit: int = 30
+        self, chat_id: int, playlist_url: str, user: str, offset: int, limit: int = 30,
+        requester_id: int | None = None,
     ) -> None:
         try:
             from HasiiMusic import spotify, queue
@@ -271,6 +281,7 @@ class CallQueue:
                 next_tracks = await spotify.playlist(limit, user, playlist_url, offset=offset)
                 if next_tracks:
                     for track in next_tracks:
+                        track.requester_id = requester_id
                         queue.add(chat_id, track)
                     logger.info(
                         f"📋 Autoloaded next {len(next_tracks)} playlist tracks (offset {offset}) for chat {chat_id}"

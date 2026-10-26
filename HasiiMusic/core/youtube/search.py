@@ -36,6 +36,7 @@ class Searcher:
                 fresh.message_id = m_id
                 fresh.file_path = None
                 fresh.user = None
+                fresh.requester_id = None
                 fresh.time = 0
                 fresh.video = False
                 return fresh

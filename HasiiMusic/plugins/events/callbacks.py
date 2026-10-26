@@ -14,6 +14,7 @@ from pyrogram.errors import FloodWait, QueryIdInvalid
 
 from HasiiMusic import tune, app, config, db, lang, logger, queue, tg, yt
 from HasiiMusic.helpers import admin_check, buttons, can_manage_vc
+from HasiiMusic.helpers._requester import TrackChangedError, ensure_current_track
 
 
 def safe_callback(func):
@@ -21,6 +22,11 @@ def safe_callback(func):
     async def wrapper(client, query: types.CallbackQuery):
         try:
             return await func(client, query)
+        except TrackChangedError:
+            try:
+                return await query.answer(query.lang["play_expired"], show_alert=True)
+            except QueryIdInvalid:
+                return
         except QueryIdInvalid:
             return
         except Exception as e:
@@ -82,10 +88,12 @@ async def _controls(_, query: types.CallbackQuery):
             pass
         return
 
-    # Check admin permissions for all other controls
-    # Inline permission check: sudo users, authorized users, or group admins
+    if chat_id != query.message.chat.id:
+        return await query.answer(query.lang["user_no_perms"], show_alert=True)
+
     user_id = query.from_user.id
     has_permission = False
+    expected_media = None
     
     if user_id in app.sudoers:
         has_permission = True
@@ -95,6 +103,12 @@ async def _controls(_, query: types.CallbackQuery):
         admins = await db.get_admins(chat_id)
         if user_id in admins:
             has_permission = True
+
+    if not has_permission and action != "force":
+        current = queue.get_current(chat_id)
+        if current is not None and getattr(current, "requester_id", None) == user_id:
+            has_permission = True
+            expected_media = current
     
     if not has_permission:
         return await query.answer("⚠️ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴘᴇʀᴍɪssɪᴏɴ ᴛᴏ ᴜsᴇ ᴛʜɪs.", show_alert=True)
@@ -107,21 +121,22 @@ async def _controls(_, query: types.CallbackQuery):
     
     # Handle seek actions
     if action.startswith("seek_"):
-        return await handle_seek(query, chat_id, action, user)
+        return await handle_seek(query, chat_id, action, user, expected_media=expected_media)
     
     # Handle loop action
     if action == "loop":
-        return await handle_loop(query, chat_id, user)
+        return await handle_loop(query, chat_id, user, expected_media=expected_media)
     
 
     await query.answer(query.lang["processing"], show_alert=True)
+    control_options = {"expected_media": expected_media} if expected_media is not None else {}
 
     if action == "pause":
         if not await db.playing(chat_id):
             return await query.answer(
                 query.lang["play_already_paused"], show_alert=True
             )
-        if not await tune.pause(chat_id):
+        if not await tune.pause(chat_id, **control_options):
             return await query.answer(query.lang["not_playing"], show_alert=True)
         if qaction:
             return await query.edit_message_reply_markup(
@@ -135,7 +150,7 @@ async def _controls(_, query: types.CallbackQuery):
         status = query.lang["playing"]
         if await db.playing(chat_id):
             return await query.answer(query.lang["play_not_paused"], show_alert=True)
-        if not await tune.resume(chat_id):
+        if not await tune.resume(chat_id, **control_options):
             return await query.answer(query.lang["not_playing"], show_alert=True)
         if qaction:
             return await query.edit_message_reply_markup(
@@ -145,12 +160,12 @@ async def _controls(_, query: types.CallbackQuery):
         reply = query.lang["play_resumed"].format(user)
 
     elif action == "previous":
-        await tune.play_previous(chat_id)
+        await tune.play_previous(chat_id, **control_options)
         status = query.lang["skipped"]  # We reuse the "skipped" text or define a new one if available
         reply = "Track reverted." # Basic reply
 
     elif action == "skip":
-        await tune.play_next(chat_id)
+        await tune.play_next(chat_id, **control_options)
         status = query.lang["skipped"]
         reply = query.lang["play_skipped"].format(user)
 
@@ -161,7 +176,11 @@ async def _controls(_, query: types.CallbackQuery):
 
         current = queue.get_current(chat_id)
         m_id = current.message_id if current else None
-        queue.force_add(chat_id, media, remove=pos)
+        async with tune.get_lock(chat_id):
+            pos, media = queue.check_item(chat_id, args[3])
+            if not media or pos == -1:
+                return await query.edit_message_text(query.lang["play_expired"])
+            queue.force_add(chat_id, media, remove=pos)
         try:
             await app.delete_messages(
                 chat_id=chat_id, message_ids=[
@@ -181,14 +200,12 @@ async def _controls(_, query: types.CallbackQuery):
         return await tune.play_media(chat_id, msg, media)
 
     elif action == "replay":
-        media = queue.get_current(chat_id)
-        media.user = user
-        await tune.replay(chat_id)
+        await tune.replay(chat_id, **control_options)
         status = query.lang["replayed"]
         reply = query.lang["play_replayed"].format(user)
 
     elif action == "stop":
-        await tune.stop(chat_id)
+        await tune.stop(chat_id, **control_options)
         status = query.lang["stopped"]
         reply = query.lang["play_stopped"].format(user)
 
@@ -242,8 +259,9 @@ async def _controls(_, query: types.CallbackQuery):
         pass
 
 
-async def handle_seek(query: types.CallbackQuery, chat_id: int, action: str, user: str):
+async def handle_seek(query: types.CallbackQuery, chat_id: int, action: str, user: str, *, expected_media=None):
     media = queue.get_current(chat_id)
+    ensure_current_track(media, expected_media)
     if not media or media.is_live:
         return await query.answer("⚠️ ᴄᴀɴɴᴏᴛ ꜱᴇᴇᴋ ɪɴ ʟɪᴠᴇ ꜱᴛʀᴇᴀᴍꜱ!", show_alert=True)
     
@@ -277,7 +295,8 @@ async def handle_seek(query: types.CallbackQuery, chat_id: int, action: str, use
         return await query.answer(f"⏭️ ᴛᴏᴏ ᴄʟᴏꜱᴇ ᴛᴏ ᴛʜᴇ ᴇɴᴅ!", show_alert=True)
     
     # Perform seek
-    success = await tune.seek_stream(chat_id, int(new_time))
+    options = {"expected_media": expected_media} if expected_media is not None else {}
+    success = await tune.seek_stream(chat_id, int(new_time), **options)
     if success:
         # Format time display
         import time as time_module
@@ -307,8 +326,12 @@ async def handle_seek(query: types.CallbackQuery, chat_id: int, action: str, use
             pass
 
 
-async def handle_loop(query: types.CallbackQuery, chat_id: int, user: str):
-    current_loop = await db.get_loop(chat_id)
+async def handle_loop(query: types.CallbackQuery, chat_id: int, user: str, *, expected_media=None):
+    async with tune.get_lock(chat_id):
+        ensure_current_track(queue.get_current(chat_id), expected_media)
+        current_loop = await db.get_loop(chat_id)
+        new_loop = {0: 1, 1: 10}.get(current_loop, 0)
+        await db.set_loop(chat_id, new_loop)
     
     # Cycle through loop modes: 0 (off) -> 1 (single) -> 10 (queue) -> 0
     if current_loop == 0:
@@ -324,7 +347,6 @@ async def handle_loop(query: types.CallbackQuery, chat_id: int, user: str):
         text = "➡️ ʟᴏᴏᴘ: ᴏꜰꜰ"
         message = f"➡️ ʟᴏᴏᴘ ᴍᴏᴅᴇ <b>ᴅɪꜱᴀʙʟᴇᴅ</b>"
     
-    await db.set_loop(chat_id, new_loop)
     await query.answer(text, show_alert=False)
     await query.message.reply_text(message)
 

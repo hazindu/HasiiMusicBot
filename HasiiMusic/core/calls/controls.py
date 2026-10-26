@@ -13,13 +13,16 @@ import asyncio
 from ntgcalls import ConnectionNotFound
 from pytgcalls import exceptions
 from HasiiMusic import app, db, logger, preload, queue, lang
+from HasiiMusic.helpers._requester import ensure_current_track
 
 class CallControls:
     def __init__(self, controller):
         self.controller = controller
 
-    async def pause(self, chat_id: int) -> bool:
+    async def pause(self, chat_id: int, *, expected_media=None) -> bool:
         async with self.controller.get_lock(chat_id):
+            if expected_media is not None:
+                ensure_current_track(queue.get_current(chat_id), expected_media)
             client = await db.get_assistant(chat_id)
             try:
                 await client.pause(chat_id)
@@ -37,8 +40,10 @@ class CallControls:
                 logger.error(f"Pause failed for {chat_id}: {e}")
                 return False
 
-    async def resume(self, chat_id: int) -> bool:
+    async def resume(self, chat_id: int, *, expected_media=None) -> bool:
         async with self.controller.get_lock(chat_id):
+            if expected_media is not None:
+                ensure_current_track(queue.get_current(chat_id), expected_media)
             client = await db.get_assistant(chat_id)
             try:
                 await client.resume(chat_id)
@@ -55,8 +60,10 @@ class CallControls:
                 logger.error(f"Resume failed for {chat_id}: {e}")
                 return False
 
-    async def stop(self, chat_id: int) -> None:
+    async def stop(self, chat_id: int, *, expected_media=None) -> None:
         async with self.controller.get_lock(chat_id):
+            if expected_media is not None:
+                ensure_current_track(queue.get_current(chat_id), expected_media)
             await self._stop_impl(chat_id)
 
     async def _stop_impl(self, chat_id: int) -> None:
