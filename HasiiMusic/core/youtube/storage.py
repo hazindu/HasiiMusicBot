@@ -61,6 +61,13 @@ class StorageManager:
                     if self.is_valid_file(path):
                         return path
                     self.delete_stub(path)
+            # "bestaudio/best" falls back to a combined mp4 when no audio-only
+            # format is available; it still plays fine as audio
+            for path in candidates:
+                if os.path.isdir(path):
+                    continue
+                if Path(path).suffix.lower() in video_exts and self.is_valid_file(path):
+                    return path
 
         # No valid file found
         return None

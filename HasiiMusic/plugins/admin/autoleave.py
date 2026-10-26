@@ -19,7 +19,7 @@ from HasiiMusic import app, db
 async def autoleave_command(_, m: Message) -> None:
     
     # Check if user is sudo user
-    if m.from_user.id not in app.sudoers:
+    if not m.from_user or m.from_user.id not in app.sudoers:
         return await m.reply_text(
             "❌ ᴏɴʟʏ ꜱᴜᴅᴏ ᴜꜱᴇʀꜱ ᴄᴀɴ ᴜꜱᴇ ᴛʜɪꜱ ᴄᴏᴍᴍᴀɴᴅ."
         )

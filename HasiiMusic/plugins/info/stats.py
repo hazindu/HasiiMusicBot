@@ -35,7 +35,8 @@ async def _stats(_, m: types.Message):
         caption=m.lang["stats_fetching"],
     )
 
-    is_sudo = m.from_user.id in app.sudoers
+    # from_user is None for anonymous admins and channel posts
+    is_sudo = bool(m.from_user) and m.from_user.id in app.sudoers
 
     _utext = m.lang["stats_user"].format(
         app.name,
