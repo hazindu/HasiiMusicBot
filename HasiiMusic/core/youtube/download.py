@@ -24,6 +24,7 @@ class Downloader:
         self._storage = storage_manager
         self._searcher = searcher
         self._download_locks: dict = {}
+        self._download_tasks: set = set()  # keep references to running download tasks
         self._download_semaphore = asyncio.Semaphore(5)
         self._max_video_height = getattr(config, "VIDEO_MAX_HEIGHT", 1080)
         
@@ -160,117 +161,132 @@ class Downloader:
                 return None
 
         # Acquire per-video-ID lock to prevent duplicate concurrent downloads of the same video.
-        async with self._get_download_lock(video_id):
-            cached = _check_cache()
-            if cached:
-                return cached
+        async def _locked_download() -> Optional[str]:
+            async with self._get_download_lock(video_id):
+                cached = _check_cache()
+                if cached:
+                    return cached
 
-            # **PERFORMANCE FIX**: Use semaphore to limit concurrent downloads
-            async with self._download_semaphore:
-                cookie = self._cookies.get_cookies()
-                base_opts = {
-                    "outtmpl": "downloads/%(id)s.%(ext)s",
-                    "quiet": True,
-                    "noplaylist": True,
-                    "geo_bypass": True,
-                    "no_warnings": True,
-                    "overwrites": False,
-                    "nocheckcertificate": True,
-                    "continuedl": True,
-                    "noprogress": True,
-                    "concurrent_fragment_downloads": 4,
-                    "http_chunk_size": 524288,  # 512KB chunks
-                    "socket_timeout": 30,
-                    "retries": 2,
-                    "fragment_retries": 2,
-                    "extractor_retries": 5,
-                    "sleep_interval_requests": 1,
-                }
-
-                if video:
-                    height_filter = ""
-                    if self._max_video_height and self._max_video_height > 0:
-                        height_filter = f"[height<={self._max_video_height}]"
-                    format_chain = (
-                        f"bestvideo[ext=mp4]{height_filter}+bestaudio[ext=m4a]/"
-                        f"bestvideo{height_filter}+bestaudio/"
-                        "bestvideo+bestaudio/best"
-                    )
-                    ydl_opts = {
-                        **base_opts,
-                        "format": format_chain,
-                        "merge_output_format": "mp4",
-                        "postprocessors": [
-                            {
-                                "key": "FFmpegVideoConvertor",
-                                "preferedformat": "mp4",
-                            }
-                        ],
-                    }
-                else:
-                    ydl_opts = {
-                        **base_opts,
-                        "format": "bestaudio/best",
-                        "postprocessors": [],
+                # **PERFORMANCE FIX**: Use semaphore to limit concurrent downloads
+                async with self._download_semaphore:
+                    cookie = self._cookies.get_cookies()
+                    base_opts = {
+                        "outtmpl": "downloads/%(id)s.%(ext)s",
+                        "quiet": True,
+                        "noplaylist": True,
+                        "geo_bypass": True,
+                        "no_warnings": True,
+                        "overwrites": False,
+                        "nocheckcertificate": True,
+                        "continuedl": True,
+                        "noprogress": True,
+                        "concurrent_fragment_downloads": 4,
+                        "http_chunk_size": 524288,  # 512KB chunks
+                        "socket_timeout": 30,
+                        "retries": 2,
+                        "fragment_retries": 2,
+                        "extractor_retries": 5,
+                        "sleep_interval_requests": 1,
                     }
 
-                ydl_opts_cookie = {
-                    **ydl_opts,
-                    "cookiefile": cookie,
-                }
+                    if video:
+                        height_filter = ""
+                        if self._max_video_height and self._max_video_height > 0:
+                            height_filter = f"[height<={self._max_video_height}]"
+                        format_chain = (
+                            f"bestvideo[ext=mp4]{height_filter}+bestaudio[ext=m4a]/"
+                            f"bestvideo{height_filter}+bestaudio/"
+                            "bestvideo+bestaudio/best"
+                        )
+                        ydl_opts = {
+                            **base_opts,
+                            "format": format_chain,
+                            "merge_output_format": "mp4",
+                            "postprocessors": [
+                                {
+                                    "key": "FFmpegVideoConvertor",
+                                    "preferedformat": "mp4",
+                                }
+                            ],
+                        }
+                    else:
+                        ydl_opts = {
+                            **base_opts,
+                            "format": "bestaudio/best",
+                            "postprocessors": [],
+                        }
 
-                def _download(ydl_runtime_opts):
-                    ydl_instance = None
-                    try:
-                        ydl_instance = yt_dlp.YoutubeDL(ydl_runtime_opts)
-                        info = ydl_instance.extract_info(url, download=True)
-                        if not info:
-                            logger.error(f"❌ Failed to extract info for {video_id}")
-                            return None
+                    ydl_opts_cookie = {
+                        **ydl_opts,
+                        "cookiefile": cookie,
+                    }
 
-                        time.sleep(0.5)
-                        located = self._storage.locate_download_file(video_id, video=video)
-                        if located:
-                            return located
-                        logger.error(f"❌ Download completed but file not found for: {video_id}")
-                        return None
-                    except yt_dlp.utils.ExtractorError as ex:
-                        error_msg = str(ex)
-                        if "not available" in error_msg.lower():
+                    def _download(ydl_runtime_opts):
+                        ydl_instance = None
+                        try:
+                            ydl_instance = yt_dlp.YoutubeDL(ydl_runtime_opts)
+                            info = ydl_instance.extract_info(url, download=True)
+                            if not info:
+                                logger.error(f"❌ Failed to extract info for {video_id}")
+                                return None
+
+                            time.sleep(0.5)
+                            located = self._storage.locate_download_file(video_id, video=video)
+                            if located:
+                                return located
+                            found = [Path(f).name for f in glob.glob(f"downloads/{video_id}*")]
                             logger.error(
-                                "❌ Video not available: May be region-blocked or private.")
-                        elif "age" in error_msg.lower():
-                            logger.error(
-                                "❌ Age-restricted video: Cookies required.")
-                        else:
-                            logger.error("❌ YouTube extraction failed: %s", ex)
-                        return None
-                    except yt_dlp.utils.DownloadError as ex:
-                        error_msg = str(ex)
-                        recovered = self._storage.locate_download_file(video_id, video=video)
-                        if "unable to rename file" in error_msg.lower() and recovered:
-                            logger.warning(
-                                f"⚠️ Renaming failed for {video_id}, using recovered file {Path(recovered).name}"
+                                f"❌ Download completed but file not found for: {video_id} "
+                                f"(files present: {found or 'none'})"
                             )
-                            return recovered
-                        if "416" in error_msg or "Requested range not satisfiable" in error_msg:
-                            logger.warning(f"⚠️ Range error for {video_id}, skipping")
-                        else:
-                            logger.warning(f"⚠️ Download error for {video_id}: {ex}")
-                            if recovered:
+                            return None
+                        except yt_dlp.utils.ExtractorError as ex:
+                            error_msg = str(ex)
+                            if "not available" in error_msg.lower():
+                                logger.error(
+                                    "❌ Video not available: May be region-blocked or private.")
+                            elif "age" in error_msg.lower():
+                                logger.error(
+                                    "❌ Age-restricted video: Cookies required.")
+                            else:
+                                logger.error("❌ YouTube extraction failed: %s", ex)
+                            return None
+                        except yt_dlp.utils.DownloadError as ex:
+                            error_msg = str(ex)
+                            recovered = self._storage.locate_download_file(video_id, video=video)
+                            if "unable to rename file" in error_msg.lower() and recovered:
                                 logger.warning(
-                                    f"⚠️ Using recovered file for {video_id} despite download error"
+                                    f"⚠️ Renaming failed for {video_id}, using recovered file {Path(recovered).name}"
                                 )
                                 return recovered
-                        return None
-                    except Exception as ex:
-                        logger.warning(f"⚠️ Unexpected download error for {video_id}: {ex}")
-                        return None
-                    finally:
-                        if ydl_instance:
-                            try:
-                                ydl_instance.close()
-                            except Exception:
-                                pass
+                            if "416" in error_msg or "Requested range not satisfiable" in error_msg:
+                                logger.warning(f"⚠️ Range error for {video_id}, skipping")
+                            else:
+                                logger.warning(f"⚠️ Download error for {video_id}: {ex}")
+                                if recovered:
+                                    logger.warning(
+                                        f"⚠️ Using recovered file for {video_id} despite download error"
+                                    )
+                                    return recovered
+                            return None
+                        except Exception as ex:
+                            logger.warning(f"⚠️ Unexpected download error for {video_id}: {ex}")
+                            return None
+                        finally:
+                            if ydl_instance:
+                                try:
+                                    ydl_instance.close()
+                                except Exception:
+                                    pass
 
-                return await asyncio.to_thread(_download, ydl_opts_cookie)
+                    return await asyncio.to_thread(_download, ydl_opts_cookie)
+
+        # Run the locked download as its own task and shield it from the caller.
+        # If the caller is cancelled (e.g. /stop cancels a preload), the yt-dlp thread
+        # keeps running, so the lock must stay held until it really finishes.
+        # Otherwise a second download of the same video starts and both write the
+        # same .part file ("No such file or directory: ....part").
+        task = asyncio.create_task(_locked_download())
+        self._download_tasks.add(task)
+        task.add_done_callback(self._download_tasks.discard)
+        return await asyncio.shield(task)
