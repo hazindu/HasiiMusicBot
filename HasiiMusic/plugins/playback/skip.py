@@ -37,7 +37,10 @@ async def _skip(_, m: types.Message):
     except (ChatSendPlainForbidden, ChatWriteForbidden):
         logger.warning("Cannot send plain text in media-only chat")
         return
-    
+    except Exception as e:
+        logger.warning(f"Could not send skip confirmation: {e}")
+        return
+
     # Auto-delete after 5 seconds
     await asyncio.sleep(5)
     try:
