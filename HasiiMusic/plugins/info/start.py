@@ -74,10 +74,14 @@ async def start(_, message: types.Message):
         )
     except Exception:
         # If the welcome photo cannot be sent, send the text menu instead.
-        await message.reply_text(
-            text=_text,
-            reply_markup=key,
-        )
+        try:
+            await message.reply_text(
+                text=_text,
+                reply_markup=key,
+            )
+        except Exception:
+            # Slowmode, flood wait, deleted message, etc. - nothing more we can do
+            pass
 
     # For private chats, add user to database if new
     if private:

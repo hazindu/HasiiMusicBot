@@ -45,6 +45,16 @@ async def safe_reply(message, text, **kwargs):
         logger.warning(
             f"Cannot send text in chat {message.chat.id} (chat write forbidden)")
         return None
+    except FloodWait as e:
+        if e.value > 30:
+            logger.warning(f"safe_reply: flood wait too long ({e.value}s), skipping")
+            return None
+        await asyncio.sleep(e.value + 1)
+        try:
+            return await message.reply_text(text, **kwargs)
+        except Exception as e2:
+            logger.error(f"Error in safe_reply after flood wait: {e2}")
+            return None
     except Exception as e:
         logger.error(f"Error in safe_reply: {e}")
         return None
@@ -107,6 +117,10 @@ async def play_hndlr(
             return  # Abort silently
     except Exception:
         return  # If we can't even send initial message, abort
+
+    if not sent:
+        # Could not send the status message (flood/slowmode/forbidden) - abort
+        return
 
     mention = m.from_user.mention
     media = tg.get_media(m.reply_to_message) if m.reply_to_message else None

@@ -199,7 +199,14 @@ def checkUB(play):
                         await umm.delete()
                     except:
                         pass
-                await client.resolve_peer(m.chat.id)
+                try:
+                    await client.resolve_peer(m.chat.id)
+                except (errors.ChannelInvalid, errors.ChannelPrivate, KeyError):
+                    await safe_reply(
+                        "<blockquote>❌ The assistant could not access this chat. "
+                        "Please make sure it has joined (not banned) and try again.</blockquote>"
+                    )
+                    return
 
         try:
             await m.delete()

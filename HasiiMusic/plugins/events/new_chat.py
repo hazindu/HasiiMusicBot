@@ -22,7 +22,10 @@ async def new_chat_member(_, message: types.Message):
             chat_name = chat.title
             chat_id = chat.id
             chat_username = f"@{chat.username}" if chat.username else "ᴘʀɪᴠᴀᴛᴇ ɢʀᴏᴜᴘ"
-            members_count = await app.get_chat_members_count(chat_id)
+            try:
+                members_count = await app.get_chat_members_count(chat_id)
+            except Exception:
+                members_count = "ᴜɴᴋɴᴏᴡɴ"
 
             # Get the user who added the bot
             added_by = message.from_user
