@@ -14,6 +14,8 @@ import logging
 from pytgcalls import PyTgCalls
 from pyrogram.types import Message
 from HasiiMusic.helpers import Media, Track
+from HasiiMusic.helpers._requester import ensure_current_track
+from HasiiMusic import queue as playback_queue
 
 from .utils import CallsUtils, PyTgCallsErrorFilter
 from .manager import CallsManager
@@ -52,17 +54,20 @@ class TgCall(PyTgCalls):
     async def ping(self) -> float:
         return await self._manager.ping()
 
-    async def pause(self, chat_id: int) -> bool:
-        return await self._controls.pause(chat_id)
+    async def pause(self, chat_id: int, *, expected_media=None) -> bool:
+        return await self._controls.pause(chat_id, expected_media=expected_media)
 
-    async def resume(self, chat_id: int) -> bool:
-        return await self._controls.resume(chat_id)
+    async def resume(self, chat_id: int, *, expected_media=None) -> bool:
+        return await self._controls.resume(chat_id, expected_media=expected_media)
 
-    async def stop(self, chat_id: int) -> None:
-        return await self._controls.stop(chat_id)
+    async def stop(self, chat_id: int, *, expected_media=None) -> None:
+        return await self._controls.stop(chat_id, expected_media=expected_media)
 
-    async def seek_stream(self, chat_id: int, seconds: int) -> bool:
-        return await self._controls.seek_stream(chat_id, seconds)
+    async def seek_stream(self, chat_id: int, seconds: int, *, expected_media=None) -> bool:
+        async with self.get_lock(chat_id):
+            if expected_media is not None:
+                ensure_current_track(playback_queue.get_current(chat_id), expected_media)
+            return await self._controls.seek_stream(chat_id, seconds)
 
     async def play_media(
         self,
@@ -73,11 +78,11 @@ class TgCall(PyTgCalls):
     ) -> None:
         return await self._player.play_media(chat_id, message, media, seek_time)
 
-    async def replay(self, chat_id: int) -> None:
-        return await self._queue.replay(chat_id)
+    async def replay(self, chat_id: int, *, expected_media=None) -> None:
+        return await self._queue.replay(chat_id, expected_media=expected_media)
 
-    async def play_next(self, chat_id: int, expected_index: int = None) -> None:
-        return await self._queue.play_next(chat_id, expected_index)
+    async def play_next(self, chat_id: int, expected_index: int = None, *, expected_media=None) -> None:
+        return await self._queue.play_next(chat_id, expected_index, expected_media=expected_media)
 
-    async def play_previous(self, chat_id: int) -> bool:
-        return await self._queue.play_previous(chat_id)
+    async def play_previous(self, chat_id: int, *, expected_media=None) -> bool:
+        return await self._queue.play_previous(chat_id, expected_media=expected_media)

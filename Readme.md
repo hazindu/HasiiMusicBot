@@ -99,6 +99,15 @@ Restrict playback controls to:
 - Bot owner
 - Sudo users
 
+The requester of the current track can also use its playback buttons while that
+track remains current. This does not add them to the authorized-user list or
+grant access to admin commands. Force-playing a queued track remains restricted
+to administrators, authorized users, and sudo users.
+
+The existing effects of the buttons still apply: Stop clears the queue, and Loop
+changes the group's loop mode. When the track changes, its requester loses this
+temporary access unless they already have one of the roles above.
+
 ### 🔄 Automatic Voice Chat Cleanup
 
 Automatically detects inactive voice chats and leaves them to conserve server resources.

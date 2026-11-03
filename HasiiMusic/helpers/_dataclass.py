@@ -24,6 +24,7 @@ class Media:
     playlist_url: str = None
     playlist_type: str = None
     playlist_index: int = 0
+    requester_id: int | None = None
 
 
 @dataclass
@@ -46,3 +47,4 @@ class Track:
     playlist_url: str = None
     playlist_type: str = None
     playlist_index: int = 0
+    requester_id: int | None = None
