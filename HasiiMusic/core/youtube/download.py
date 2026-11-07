@@ -24,7 +24,7 @@ class Downloader:
         self._storage = storage_manager
         self._searcher = searcher
         self._download_locks: dict = {}
-        self._download_tasks: set = set()  # keep references to running download tasks
+        self._download_tasks: set = set()  # running download tasks
         self._download_semaphore = asyncio.Semaphore(5)
         self._max_video_height = getattr(config, "VIDEO_MAX_HEIGHT", 1080)
         
@@ -167,7 +167,7 @@ class Downloader:
                 if cached:
                     return cached
 
-                # **PERFORMANCE FIX**: Use semaphore to limit concurrent downloads
+                # limit how many downloads run at the same time
                 async with self._download_semaphore:
                     cookie = self._cookies.get_cookies()
                     base_opts = {
@@ -281,11 +281,8 @@ class Downloader:
 
                     return await asyncio.to_thread(_download, ydl_opts_cookie)
 
-        # Run the locked download as its own task and shield it from the caller.
-        # If the caller is cancelled (e.g. /stop cancels a preload), the yt-dlp thread
-        # keeps running, so the lock must stay held until it really finishes.
-        # Otherwise a second download of the same video starts and both write the
-        # same .part file ("No such file or directory: ....part").
+        # run it as a separate task so the lock isn't released if the caller gets
+        # cancelled (like /stop cancelling a preload) while yt-dlp is still downloading
         task = asyncio.create_task(_locked_download())
         self._download_tasks.add(task)
         task.add_done_callback(self._download_tasks.discard)

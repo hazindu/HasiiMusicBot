@@ -15,7 +15,7 @@ import time
 
 from pyrogram import types
 
-from HasiiMusic import config
+from HasiiMusic import config, logger
 from HasiiMusic.helpers import Media, buttons, utils
 
 
@@ -29,6 +29,34 @@ class Telegram:
         self.last_edit = {}
         self.active_tasks = {}  # Active download tasks for cancellation
         self.sleep = 5  # Minimum seconds between progress updates
+
+    @staticmethod
+    async def _probe_duration(file_path: str) -> int:
+        # get the duration from the file with ffprobe, returns 0 if it fails
+        try:
+            process = await asyncio.create_subprocess_exec(
+                "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1", "-i", file_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            try:
+                output, _ = await asyncio.wait_for(process.communicate(), timeout=10)
+            finally:
+                # kill ffprobe if it's still running (timeout or cancel)
+                if process.returncode is None:
+                    try:
+                        process.kill()
+                    except ProcessLookupError:
+                        pass
+                    await process.communicate()
+            if process.returncode != 0:
+                logger.warning("Unable to detect Telegram media duration: ffprobe failed")
+                return 0
+            return max(0, int(float(output.strip())))
+        except (OSError, asyncio.TimeoutError, ValueError, OverflowError) as error:
+            logger.warning("Unable to detect Telegram media duration: %s", type(error).__name__)
+            return 0
 
     def get_media(self, msg: types.Message) -> bool:
         """Check if message contains downloadable media."""
@@ -57,13 +85,13 @@ class Telegram:
         is_video = bool(msg.video) or (msg.document and getattr(msg.document, "mime_type", "").startswith("video/"))
         # Unique file identifier
         file_id = getattr(media, "file_unique_id", None)
-        # file_name can exist but be None (e.g. audio/video sent without a name)
+        # file_name can be None for some audio/video files
         file_ext = (getattr(media, "file_name", None) or "").split(
             ".")[-1]  # File extension
         file_size = getattr(media, "file_size", 0)  # File size in bytes
         file_title = getattr(
             media, "title", "Telegram File") or "Telegram File"  # Media title
-        duration = getattr(media, "duration", 0)  # Duration in seconds
+        duration = max(0, getattr(media, "duration", 0) or 0)  # Duration in seconds
 
         # Validate duration limit (configured in config.py)
         if duration > config.DURATION_LIMIT:
@@ -119,6 +147,21 @@ class Telegram:
                         round(time.time() - start_time, 2))
                 )
 
+            # stop if the download was cancelled
+            if event.is_set():
+                return await sent.stop_propagation()
+
+            # telegram didn't give a duration (e.g. files sent as documents), read it from the file
+            if not duration:
+                task = asyncio.create_task(self._probe_duration(file_path))
+                self.active_tasks[msg_id] = task
+                duration = await task
+                if event.is_set():
+                    return await sent.stop_propagation()
+                if duration > config.DURATION_LIMIT:
+                    await sent.edit_text(sent.lang["play_duration_limit"].format(config.DURATION_LIMIT // 60))
+                    return await sent.stop_propagation()
+
             # Format duration with hours support
             if duration >= 3600:
                 duration_str = time.strftime("%H:%M:%S", time.gmtime(duration))
@@ -140,6 +183,7 @@ class Telegram:
         finally:
             self.events.pop(msg_id, None)
             self.last_edit.pop(msg_id, None)
+            self.active_tasks.pop(msg_id, None)
             self.active = [f for f in self.active if f != file_id]
 
     async def cancel(self, query: types.CallbackQuery):

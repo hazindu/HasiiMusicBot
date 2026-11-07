@@ -80,7 +80,7 @@ async def start(_, message: types.Message):
                 reply_markup=key,
             )
         except Exception:
-            # Slowmode, flood wait, deleted message, etc. - nothing more we can do
+            # slowmode, flood wait etc, just skip it
             pass
 
     # For private chats, add user to database if new

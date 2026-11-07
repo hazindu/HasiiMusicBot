@@ -86,7 +86,7 @@ class CallQueue:
                 media = queue.get_current(chat_id)
 
             if not media and loop_mode == 10:
-                # the queue is empty now; the played tracks are in history
+                # queue is empty here, so refill it from history
                 queue.requeue_history(chat_id)
                 all_items = queue.get_all(chat_id)
                 if all_items:

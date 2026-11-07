@@ -85,7 +85,7 @@ class Queue:
             self.history[chat_id].append(self.queues[chat_id].popleft())
 
     def requeue_history(self, chat_id: int) -> None:
-        # Move already played items back into the queue (used by queue loop mode)
+        # put played items back in the queue (for queue loop)
         self.queues[chat_id].extend(self.history[chat_id])
         self.history[chat_id].clear()
 
