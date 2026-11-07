@@ -91,7 +91,7 @@ async def tag_admins(client, message: types.Message):
 
         # Send the reply
         try:
-            # link previews are already disabled globally on the Bot client
+            # link previews are already off in bot.py
             await message.reply_text(reply_msg)
         except Exception as e:
             await message.reply_text(

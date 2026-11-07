@@ -84,8 +84,7 @@ class Thumbnail:
             # Download thumbnail (async operation)
             await self.save_thumb(temp, thumb_url)
             
-            # **PERFORMANCE FIX**: Run PIL operations in thread executor to avoid blocking event loop
-            # This prevents lag when generating thumbnails for multiple groups simultaneously
+            # run PIL in a thread so it doesn't block the event loop
             return await asyncio.get_event_loop().run_in_executor(
                 None, self._generate_sync, temp, output, song, size
             )

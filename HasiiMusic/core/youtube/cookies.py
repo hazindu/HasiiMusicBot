@@ -36,7 +36,7 @@ class CookieManager:
 
     @staticmethod
     def raw_url(url: str) -> str:
-        # Convert a paste link into the URL that serves its raw content
+        # get the raw link for a paste url
         parsed = urlparse(url if "://" in url else f"https://{url}")
         host = parsed.netloc.lower().removeprefix("www.")
         parts = [p for p in parsed.path.split("/") if p]

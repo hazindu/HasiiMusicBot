@@ -163,7 +163,7 @@ async def vc_watcher(sleep=15):
         
         for chat_id in list(db.active_calls):
             try:
-                # Per-chat /autoleave setting, falls back to the global AUTO_LEAVE
+                # check the chat's autoleave setting
                 if not await db.get_autoleave(chat_id):
                     alone_times.pop(chat_id, None)
                     continue

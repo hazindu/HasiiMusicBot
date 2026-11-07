@@ -30,7 +30,7 @@ class YouTubeUtils:
 
     def is_direct_stream(self, url: str) -> bool:
         """Check if the URL is a direct m3u8/HLS/DASH stream link."""
-        # YouTube links (e.g. youtube.com/live/ID) must go through yt-dlp
+        # don't treat youtube links (like /live/) as direct streams
         if re.match(self.regex, url):
             return False
         return bool(re.match(self.stream_regex, url))

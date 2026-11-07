@@ -119,7 +119,7 @@ async def play_hndlr(
         return  # If we can't even send initial message, abort
 
     if not sent:
-        # Could not send the status message (flood/slowmode/forbidden) - abort
+        # couldn't send the status message, stop here
         return
 
     mention = m.from_user.mention
@@ -205,7 +205,7 @@ async def play_hndlr(
             return
 
     elif len(m.command) >= 2:
-        # Drop the -f (force) flag so it isn't part of the search
+        # don't include the -f flag in the search
         args = m.command[2:] if m.command[1] == "-f" else m.command[1:]
         query = " ".join(args)
         file = await yt.search(query, sent.id)
@@ -264,7 +264,7 @@ async def play_hndlr(
                 for track in tracks:
                     queue.add(chat_id, track)
 
-            # ✨ NEW: Start preloading queued tracks in background
+            # preload the next tracks in the background
             try:
                 from HasiiMusic import preload
                 asyncio.create_task(preload.start_preload(chat_id, count=2))

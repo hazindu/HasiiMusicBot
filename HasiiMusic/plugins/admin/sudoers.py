@@ -38,7 +38,7 @@ async def _sudo(_, m: types.Message):
             return await m.reply_text("<blockquote>❌ ᴛʜᴇ ᴏᴡɴᴇʀ ᴄᴀɴ'ᴛ ʙᴇ ʀᴇᴍᴏᴠᴇᴅ ꜰʀᴏᴍ ꜱᴜᴅᴏ.</blockquote>")
 
         app.sudoers.discard(user.id)
-        app.sudo_filter.discard(user.id)  # filters.user is a set, so remove directly
+        app.sudo_filter.discard(user.id)  # remove from the filter too
         await db.del_sudo(user.id)
         await m.reply_text(m.lang["sudo_removed"].format(user.mention))
 

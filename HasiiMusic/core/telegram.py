@@ -32,6 +32,7 @@ class Telegram:
 
     @staticmethod
     async def _probe_duration(file_path: str) -> int:
+        # get the duration from the file with ffprobe, returns 0 if it fails
         try:
             process = await asyncio.create_subprocess_exec(
                 "ffprobe", "-v", "error", "-show_entries", "format=duration",
@@ -42,6 +43,7 @@ class Telegram:
             try:
                 output, _ = await asyncio.wait_for(process.communicate(), timeout=10)
             finally:
+                # kill ffprobe if it's still running (timeout or cancel)
                 if process.returncode is None:
                     try:
                         process.kill()
@@ -83,13 +85,13 @@ class Telegram:
         is_video = bool(msg.video) or (msg.document and getattr(msg.document, "mime_type", "").startswith("video/"))
         # Unique file identifier
         file_id = getattr(media, "file_unique_id", None)
-        # file_name can exist but be None (e.g. audio/video sent without a name)
+        # file_name can be None for some audio/video files
         file_ext = (getattr(media, "file_name", None) or "").split(
             ".")[-1]  # File extension
         file_size = getattr(media, "file_size", 0)  # File size in bytes
         file_title = getattr(
             media, "title", "Telegram File") or "Telegram File"  # Media title
-        duration = max(0, getattr(media, "duration", 0) or 0)
+        duration = max(0, getattr(media, "duration", 0) or 0)  # Duration in seconds
 
         # Validate duration limit (configured in config.py)
         if duration > config.DURATION_LIMIT:
@@ -145,9 +147,11 @@ class Telegram:
                         round(time.time() - start_time, 2))
                 )
 
+            # stop if the download was cancelled
             if event.is_set():
                 return await sent.stop_propagation()
 
+            # telegram didn't give a duration (e.g. files sent as documents), read it from the file
             if not duration:
                 task = asyncio.create_task(self._probe_duration(file_path))
                 self.active_tasks[msg_id] = task

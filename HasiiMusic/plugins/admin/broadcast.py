@@ -79,7 +79,7 @@ async def broadcast_message(_, message: types.Message) -> None:
             broadcast_text, groups, users, sent, media_message, flags, message.lang, media_group
         )
     finally:
-        # Always reset the flag, even if something above raised
+        # reset the flag even if the broadcast fails
         broadcasting = False
 
     # Send completion message
