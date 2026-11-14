@@ -27,7 +27,7 @@ async def inline_query_handler(_, query: types.InlineQuery):
                 "extract_flat": True,
                 "extractor_args": {
                     "youtube": {
-                        "player_client": ["android", "ios"]
+                        "player_client": ["android", "ios", "mweb", "tv"]
                     }
                 },
             }

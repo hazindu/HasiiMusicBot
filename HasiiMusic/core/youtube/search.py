@@ -54,7 +54,7 @@ class Searcher:
                         "extract_flat": "in_playlist",
                         "extractor_args": {
                             "youtube": {
-                                "player_client": ["android", "ios"]
+                                "player_client": ["android", "ios", "mweb", "tv"]
                             }
                         },
                     }
@@ -102,7 +102,7 @@ class Searcher:
                         "extract_flat": True,
                         "extractor_args": {
                             "youtube": {
-                                "player_client": ["android", "ios"]
+                                "player_client": ["android", "ios", "mweb", "tv"]
                             }
                         },
                     }
@@ -166,7 +166,7 @@ class Searcher:
                     "extract_flat": "in_playlist",
                     "extractor_args": {
                         "youtube": {
-                            "player_client": ["android", "ios"]
+                            "player_client": ["android", "ios", "mweb", "tv"]
                         }
                     },
                 }

@@ -68,7 +68,7 @@ class Downloader:
                 "sleep_interval_requests": 1,
                 "extractor_args": {
                     "youtube": {
-                        "player_client": ["android", "ios"]
+                        "player_client": ["android", "ios", "mweb", "tv"]
                     }
                 },
             }
@@ -203,10 +203,10 @@ class Downloader:
                         "fragment_retries": 2,
                         "extractor_retries": 5,
                         "sleep_interval_requests": 1,
-                        # We use Android and iOS clients so YouTube does not block downloads
+                        # We use multiple mobile and TV clients so yt-dlp has fallbacks
                         "extractor_args": {
                             "youtube": {
-                                "player_client": ["android", "ios"]
+                                "player_client": ["android", "ios", "mweb", "tv"]
                             }
                         },
                     }
