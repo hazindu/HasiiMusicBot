@@ -23,11 +23,13 @@ if sys.platform != "win32":
         pass
 
 from HasiiMusic import (tune, app, config, db,
-                   logger, stop, userbot, yt)
+                   configure_asyncio_exception_handler, logger, stop, userbot, yt)
 from HasiiMusic.plugins import all_modules
 
 
 async def main():
+    configure_asyncio_exception_handler()
+
     try:
         # Connect to DB
         await db.connect()
@@ -81,8 +83,7 @@ async def main():
 
 if __name__ == "__main__":
     try:
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(main())
+        asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("Bot stopped by user (Ctrl+C)")
     except SystemExit as e:
@@ -91,10 +92,3 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Unexpected error caused bot to stop: {e}", exc_info=True)
         # Don't raise - allow clean shutdown
-    finally:
-        # Ensure cleanup happens
-        try:
-            if loop.is_running():
-                loop.stop()
-        except:
-            pass

@@ -42,7 +42,8 @@ def _asyncio_exception_handler(loop: asyncio.AbstractEventLoop, context: dict) -
     loop.default_exception_handler(context)
 
 
-asyncio.get_event_loop().set_exception_handler(_asyncio_exception_handler)
+def configure_asyncio_exception_handler() -> None:
+    asyncio.get_running_loop().set_exception_handler(_asyncio_exception_handler)
 
 # Version
 __version__ = "3.0.1"
