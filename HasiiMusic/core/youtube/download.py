@@ -57,20 +57,25 @@ class Downloader:
         # Extract live stream URL
         if is_live:
             cookie = self._cookies.get_cookies()
-            ydl_opts = {
+            # We use Android and iOS clients so YouTube does not block bot requests
+            base_live_opts = {
                 "quiet": True,
                 "no_warnings": True,
-                "cookiefile": cookie,
                 "format": "bestaudio/best",
                 "noplaylist": True,
                 "socket_timeout": 20,
                 "extractor_retries": 5,
                 "sleep_interval_requests": 1,
+                "extractor_args": {
+                    "youtube": {
+                        "player_client": ["android", "ios"]
+                    }
+                },
             }
 
             def _extract_url():
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    try:
+                def _do_extract(opts):
+                    with yt_dlp.YoutubeDL(opts) as ydl:
                         info = ydl.extract_info(url, download=False)
                         if not info:
                             return None
@@ -85,19 +90,29 @@ class Downloader:
                                 return fmt["url"]
 
                         return info.get("manifest_url")
-                    except yt_dlp.utils.ExtractorError as ex:
-                        error_msg = str(ex)
-                        if "not available" in error_msg.lower():
-                            logger.error(
-                                "Video format not available or region-blocked.")
-                        else:
-                            logger.error(
-                                "Live stream URL extraction failed: %s", ex)
-                        return None
-                    except Exception as ex:
+
+                try:
+                    if cookie:
+                        try:
+                            # Try with cookies first
+                            return _do_extract({**base_live_opts, "cookiefile": cookie})
+                        except Exception:
+                            # If cookie is expired, try again without cookies
+                            logger.warning("Live extraction with cookie failed, trying without cookie...")
+                    return _do_extract(base_live_opts)
+                except yt_dlp.utils.ExtractorError as ex:
+                    error_msg = str(ex)
+                    if "not available" in error_msg.lower():
                         logger.error(
-                            "Unexpected error during live stream extraction: %s", ex)
-                        return None
+                            "Video format not available or region-blocked.")
+                    else:
+                        logger.error(
+                            "Live stream URL extraction failed: %s", ex)
+                    return None
+                except Exception as ex:
+                    logger.error(
+                        "Unexpected error during live stream extraction: %s", ex)
+                    return None
 
             try:
                 stream_url = await asyncio.wait_for(asyncio.to_thread(_extract_url), timeout=35)
@@ -170,6 +185,7 @@ class Downloader:
                 # limit how many downloads run at the same time
                 async with self._download_semaphore:
                     cookie = self._cookies.get_cookies()
+                    # Base options for yt-dlp
                     base_opts = {
                         "outtmpl": "downloads/%(id)s.%(ext)s",
                         "quiet": True,
@@ -187,6 +203,12 @@ class Downloader:
                         "fragment_retries": 2,
                         "extractor_retries": 5,
                         "sleep_interval_requests": 1,
+                        # We use Android and iOS clients so YouTube does not block downloads
+                        "extractor_args": {
+                            "youtube": {
+                                "player_client": ["android", "ios"]
+                            }
+                        },
                     }
 
                     if video:
@@ -279,7 +301,17 @@ class Downloader:
                                 except Exception:
                                     pass
 
-                    return await asyncio.to_thread(_download, ydl_opts_cookie)
+                    # Try downloading with cookie first if available
+                    if cookie:
+                        res = await asyncio.to_thread(_download, ydl_opts_cookie)
+                        # If cookie failed (for example, the cookie expired), try again without cookies
+                        if not res:
+                            logger.warning(
+                                f"⚠️ Download with cookies failed for {video_id}. Retrying without cookies..."
+                            )
+                            res = await asyncio.to_thread(_download, ydl_opts)
+                        return res
+                    return await asyncio.to_thread(_download, ydl_opts)
 
         # run it as a separate task so the lock isn't released if the caller gets
         # cancelled (like /stop cancelling a preload) while yt-dlp is still downloading

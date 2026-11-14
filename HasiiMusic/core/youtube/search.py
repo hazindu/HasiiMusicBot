@@ -47,12 +47,25 @@ class Searcher:
             if self.valid(query):
                 def _extract():
                     cookie = self._cookies.get_cookies() if self._cookies.checked else None
+                    # We use mobile clients so YouTube does not block search requests
                     ydl_opts = {
                         "quiet": True,
                         "noplaylist": True,
                         "extract_flat": "in_playlist",
-                        "cookiefile": cookie
+                        "extractor_args": {
+                            "youtube": {
+                                "player_client": ["android", "ios"]
+                            }
+                        },
                     }
+                    if cookie:
+                        try:
+                            # Try with cookie first
+                            with yt_dlp.YoutubeDL({**ydl_opts, "cookiefile": cookie}) as ydl:
+                                return ydl.extract_info(query, download=False)
+                        except Exception:
+                            # Cookie may be expired, so retry without it
+                            pass
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                         return ydl.extract_info(query, download=False)
 
@@ -83,11 +96,24 @@ class Searcher:
             else:
                 def _extract_search():
                     cookie = self._cookies.get_cookies() if self._cookies.checked else None
+                    # We use mobile clients so YouTube does not block search requests
                     ydl_opts = {
                         "quiet": True,
                         "extract_flat": True,
-                        "cookiefile": cookie
+                        "extractor_args": {
+                            "youtube": {
+                                "player_client": ["android", "ios"]
+                            }
+                        },
                     }
+                    if cookie:
+                        try:
+                            # Try with cookie first
+                            with yt_dlp.YoutubeDL({**ydl_opts, "cookiefile": cookie}) as ydl:
+                                return ydl.extract_info(f"ytsearch1:{query}", download=False)
+                        except Exception:
+                            # Cookie may be expired, so retry without it
+                            pass
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                         return ydl.extract_info(f"ytsearch1:{query}", download=False)
                         
@@ -134,11 +160,24 @@ class Searcher:
         try:
             def _extract_playlist():
                 cookie = self._cookies.get_cookies() if self._cookies.checked else None
+                # We use mobile clients so YouTube does not block playlist requests
                 ydl_opts = {
                     "quiet": True,
                     "extract_flat": "in_playlist",
-                    "cookiefile": cookie
+                    "extractor_args": {
+                        "youtube": {
+                            "player_client": ["android", "ios"]
+                        }
+                    },
                 }
+                if cookie:
+                    try:
+                        # Try with cookie first
+                        with yt_dlp.YoutubeDL({**ydl_opts, "cookiefile": cookie}) as ydl:
+                            return ydl.extract_info(url, download=False)
+                    except Exception:
+                        # Cookie may be expired, so retry without it
+                        pass
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     return ydl.extract_info(url, download=False)
                     

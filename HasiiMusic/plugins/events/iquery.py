@@ -21,11 +21,23 @@ async def inline_query_handler(_, query: types.InlineQuery):
     try:
         def _extract():
             cookie = yt.get_cookies() if yt.checked else None
+            # We use mobile clients so YouTube does not block search requests
             ydl_opts = {
                 "quiet": True,
                 "extract_flat": True,
-                "cookiefile": cookie
+                "extractor_args": {
+                    "youtube": {
+                        "player_client": ["android", "ios"]
+                    }
+                },
             }
+            if cookie:
+                try:
+                    with yt_dlp.YoutubeDL({**ydl_opts, "cookiefile": cookie}) as ydl:
+                        return ydl.extract_info(f"ytsearch15:{text}", download=False)
+                except Exception:
+                    # Cookie may be expired, so retry without it
+                    pass
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 return ydl.extract_info(f"ytsearch15:{text}", download=False)
 
