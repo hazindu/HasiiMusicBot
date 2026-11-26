@@ -58,6 +58,24 @@ async def main():
             except Exception as e:
                 logger.error(f"Failed to download cookies: {e}")
 
+        # Report YouTube anti-bot setup (proxy + PO token provider)
+        if config.YT_PROXY:
+            logger.info(f"🌐 yt-dlp proxy enabled: {config.YT_PROXY}")
+        if config.POT_PROVIDER_URL:
+            try:
+                import aiohttp
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(
+                        config.POT_PROVIDER_URL.rstrip("/") + "/ping",
+                        timeout=aiohttp.ClientTimeout(total=5),
+                    ) as resp:
+                        if resp.status == 200:
+                            logger.info("🛡️ PO token provider reachable.")
+                        else:
+                            logger.warning(f"⚠️ PO token provider returned HTTP {resp.status}")
+            except Exception as e:
+                logger.warning(f"⚠️ PO token provider not reachable at {config.POT_PROVIDER_URL}: {e}")
+
         # Load sudoers and blacklisted users
         sudoers = await db.get_sudoers()
         app.sudoers.update(sudoers)

@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Optional
 import yt_dlp
 from HasiiMusic import config, logger
+from .network import ytdlp_network_opts
 
 class Downloader:
     def __init__(self, cookies_manager, storage_manager, searcher):
@@ -27,6 +28,20 @@ class Downloader:
         self._download_tasks: set = set()  # running download tasks
         self._download_semaphore = asyncio.Semaphore(5)
         self._max_video_height = getattr(config, "VIDEO_MAX_HEIGHT", 1080)
+        # video_id -> time YouTube last refused it with the bot check.
+        # Retrying right away only gets the IP/cookies flagged faster.
+        self._bot_blocked: dict[str, float] = {}
+
+    BOT_BLOCK_COOLDOWN = 300  # seconds
+
+    @staticmethod
+    def _is_bot_check(error: str) -> bool:
+        e = error.lower()
+        return "not a bot" in e or "sign in to confirm" in e
+
+    def clear_bot_blocks(self) -> None:
+        # Called after cookies are replaced so blocked videos can be retried
+        self._bot_blocked.clear()
         
     def _get_download_lock(self, video_id: str) -> asyncio.Lock:
         if video_id not in self._download_locks:
@@ -54,6 +69,11 @@ class Downloader:
 
         url = "https://www.youtube.com/watch?v=" + video_id
 
+        blocked_at = self._bot_blocked.get(video_id)
+        if blocked_at and time.monotonic() - blocked_at < self.BOT_BLOCK_COOLDOWN:
+            logger.info(f"Skipping {video_id}: YouTube bot check hit recently, cooling down.")
+            return None
+
         # Extract live stream URL
         if is_live:
             cookie = self._cookies.get_cookies()
@@ -64,8 +84,9 @@ class Downloader:
                 "format": "bestaudio/best",
                 "noplaylist": True,
                 "socket_timeout": 20,
-                "extractor_retries": 5,
+                "extractor_retries": 1,
                 "sleep_interval_requests": 1,
+                **ytdlp_network_opts(),
             }
 
             def _extract_url():
@@ -91,10 +112,14 @@ class Downloader:
                             logger.error(
                                 "Video format not available or region-blocked.")
                         else:
+                            if self._is_bot_check(error_msg):
+                                self._bot_blocked[video_id] = time.monotonic()
                             logger.error(
                                 "Live stream URL extraction failed: %s", ex)
                         return None
                     except Exception as ex:
+                        if self._is_bot_check(str(ex)):
+                            self._bot_blocked[video_id] = time.monotonic()
                         logger.error(
                             "Unexpected error during live stream extraction: %s", ex)
                         return None
@@ -185,8 +210,9 @@ class Downloader:
                         "socket_timeout": 30,
                         "retries": 2,
                         "fragment_retries": 2,
-                        "extractor_retries": 5,
+                        "extractor_retries": 1,
                         "sleep_interval_requests": 1,
+                        **ytdlp_network_opts(),
                     }
 
                     if video:
@@ -249,6 +275,8 @@ class Downloader:
                                 logger.error(
                                     "❌ Age-restricted video: Cookies required.")
                             else:
+                                if self._is_bot_check(error_msg):
+                                    self._bot_blocked[video_id] = time.monotonic()
                                 logger.error("❌ YouTube extraction failed: %s", ex)
                             return None
                         except yt_dlp.utils.DownloadError as ex:
@@ -262,6 +290,8 @@ class Downloader:
                             if "416" in error_msg or "Requested range not satisfiable" in error_msg:
                                 logger.warning(f"⚠️ Range error for {video_id}, skipping")
                             else:
+                                if self._is_bot_check(error_msg):
+                                    self._bot_blocked[video_id] = time.monotonic()
                                 logger.warning(f"⚠️ Download error for {video_id}: {ex}")
                                 if recovered:
                                     logger.warning(

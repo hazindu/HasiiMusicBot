@@ -62,6 +62,12 @@ class Config:
         # YOUTUBE COOKIES
         self.COOKIES_URL: List[str] = self._parse_cookies()
 
+        # YOUTUBE ANTI-BOT
+        # Proxy for all yt-dlp traffic, e.g. socks5://warp:1080 (Cloudflare WARP)
+        self.YT_PROXY: str = getenv("YT_PROXY", "").strip()
+        # bgutil PO token provider server, e.g. http://bgutil-provider:4416
+        self.POT_PROVIDER_URL: str = getenv("POT_PROVIDER_URL", "").strip()
+
         # IMAGE URLS
         self.DEFAULT_THUMB: str = getenv(
             "DEFAULT_THUMB",

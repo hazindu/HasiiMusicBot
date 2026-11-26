@@ -6,7 +6,43 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      # Route yt-dlp through WARP and use the PO token server below.
+      # Override these in .env if you run the helpers somewhere else.
+      - YT_PROXY=${YT_PROXY:-socks5://warp:1080}
+      - POT_PROVIDER_URL=${POT_PROVIDER_URL:-http://bgutil-provider:4416}
     volumes:
       - ./HasiiMusic/cookies:/app/HasiiMusic/cookies
       - ./downloads:/app/downloads
+    depends_on:
+      - bgutil-provider
+      - warp
     command: bash start
+
+  # Generates YouTube PO tokens for yt-dlp (bgutil-ytdlp-pot-provider plugin).
+  # Only reachable inside this compose network; no ports are published.
+  bgutil-provider:
+    image: brainicism/bgutil-ytdlp-pot-provider:latest
+    container_name: bgutil_provider
+    restart: unless-stopped
+    init: true
+
+  # Cloudflare WARP as a SOCKS5/HTTP proxy on port 1080, so YouTube sees
+  # a Cloudflare IP instead of the flagged VPS IP.
+  # Only reachable inside this compose network; no ports are published.
+  warp:
+    image: caomingjun/warp:latest
+    container_name: warp
+    restart: unless-stopped
+    device_cgroup_rule: 'c 10:200 rwm'
+    environment:
+      - WARP_SLEEP=2
+    cap_add:
+      - MKNOD
+      - AUDIT_WRITE
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+    volumes:
+      - ./warp-data:/var/lib/cloudflare-warp

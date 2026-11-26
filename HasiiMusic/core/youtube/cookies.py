@@ -54,6 +54,38 @@ class CookieManager:
             return f"https://rentry.co/{parts[0]}/raw"
         return url
 
+    def clear(self) -> int:
+        # Delete all stored cookie files so stale ones are never picked again
+        removed = 0
+        if os.path.isdir("HasiiMusic/cookies"):
+            for file in os.listdir("HasiiMusic/cookies"):
+                if file.endswith(".txt"):
+                    try:
+                        os.remove(f"HasiiMusic/cookies/{file}")
+                        removed += 1
+                    except OSError as e:
+                        logger.error(f"❌ Could not remove {file}: {e}")
+        self.cookies = []
+        self.checked = True
+        self.warned = False
+        return removed
+
+    def add_file(self, content: bytes) -> str:
+        # Store raw cookie content as a new cookie file and register it
+        os.makedirs("HasiiMusic/cookies", exist_ok=True)
+        name = f"cookie{random.randint(10000, 99999)}.txt"
+        with open(f"HasiiMusic/cookies/{name}", "wb") as fw:
+            fw.write(content)
+        self.cookies.append(name)
+        self.checked = True
+        return name
+
+    @staticmethod
+    def looks_valid(content: bytes) -> bool:
+        # Netscape cookie file that includes YouTube/Google cookies
+        text = content.decode("utf-8", errors="ignore")
+        return len(text) >= 50 and (".youtube.com" in text or ".google.com" in text)
+
     async def save_cookies(self, urls: list[str]) -> None:
         logger.info("🍪 Saving cookies from urls...")
         saved_count = 0

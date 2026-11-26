@@ -10,3 +10,4 @@ __pycache__/
 HasiiMusic/cookies/*.txt
 *.session
 *.session-journal
+warp-data/

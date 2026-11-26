@@ -26,5 +26,8 @@ pymongo~=4.17.0
 pytgcrypto~=1.2.12
 py-tgcalls~=2.2.11
 python-dotenv~=1.2.2
+py-yt-search~=0.8.2
 spotipy~=2.24.0
 yt-dlp[default] @ git+https://github.com/yt-dlp/yt-dlp.git
+# PO token plugin for yt-dlp; needs the bgutil server running (see YOUTUBE_SETUP_SI.md)
+bgutil-ytdlp-pot-provider

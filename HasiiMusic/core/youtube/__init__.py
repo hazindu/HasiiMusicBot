@@ -51,6 +51,9 @@ class YouTube:
     async def search(self, query: str, m_id: int, music: bool = False) -> Track | None:
         return await self._searcher.search(query, m_id, music)
 
+    async def search_many(self, query: str, limit: int = 15) -> list[dict]:
+        return await self._searcher.search_many(query, limit)
+
     async def playlist(self, limit: int, user: str, url: str) -> list[Track]:
         return await self._searcher.playlist(limit, user, url)
 

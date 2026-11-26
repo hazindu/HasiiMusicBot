@@ -4,12 +4,10 @@
 # Lets users type @botname in any chat to search YouTube and share tracks.
 # ==============================================================================
 
-import asyncio
-import yt_dlp
 from pyrogram import types
 
 from HasiiMusic import app, config, yt
-from HasiiMusic.helpers import buttons, utils
+from HasiiMusic.helpers import buttons
 
 
 @app.on_inline_query(~app.bl_users)
@@ -19,42 +17,23 @@ async def inline_query_handler(_, query: types.InlineQuery):
         return
 
     try:
-        def _extract():
-            cookie = yt.get_cookies() if yt.checked else None
-            ydl_opts = {
-                "quiet": True,
-                "extract_flat": True,
-                "cookiefile": cookie
-            }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                return ydl.extract_info(f"ytsearch15:{text}", download=False)
-
-        results = await asyncio.to_thread(_extract)
-        if not results or "entries" not in results:
+        results = await yt.search_many(text, 15)
+        if not results:
             return
 
         answers = []
-        for video in results["entries"]:
-            if not video:
-                continue
-                
-            title = video.get("title", "Unknown Title").title()
-            
-            duration_sec = video.get("duration")
-            is_live = video.get("is_live", False)
-            if duration_sec is None and is_live:
-                duration = "LIVE"
-            else:
-                duration = utils.format_duration(int(duration_sec)) if duration_sec else "0:00"
-                
-            views = str(video.get("view_count", "N/A"))
-            thumbnail = video.get("thumbnails", [{}])[-1].get("url", "").split("?")[0] if video.get("thumbnails") else ""
-            channel = video.get("uploader", "Unknown Channel")
-            channellink = video.get("uploader_url", "https://youtube.com")
-            link = video.get("url") or video.get("webpage_url") or f"https://youtube.com/watch?v={video.get('id')}"
-            published = "N/A" # yt-dlp flat extract might not have this
+        for video in results:
+            title = (video.get("title") or "Unknown Title").title()
+            duration = video.get("duration") or "LIVE"
+            views = (video.get("viewCount") or {}).get("short") or "N/A"
+            thumbs = video.get("thumbnails") or [{}]
+            thumbnail = (thumbs[-1].get("url") or "").split("?")[0]
+            ch = video.get("channel") or {}
+            channel = ch.get("name") or "Unknown Channel"
+            channellink = ch.get("link") or "https://youtube.com"
+            link = video.get("link") or f"https://youtube.com/watch?v={video.get('id')}"
 
-            description = f"{views} views | {duration} | {channel}"
+            description = f"{views} | {duration} | {channel}"
             caption = (
                 f"<b>Title:</b> <a href='{link}'>{title[:250]}</a>\n\n"
                 f"<b>Duration:</b> {duration}\n"
