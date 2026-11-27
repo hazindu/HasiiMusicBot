@@ -29,5 +29,5 @@ python-dotenv~=1.2.2
 py-yt-search~=0.8.2
 spotipy~=2.24.0
 yt-dlp[default] @ git+https://github.com/yt-dlp/yt-dlp.git
-# PO token plugin for yt-dlp; needs the bgutil server running (see YOUTUBE_SETUP_SI.md)
+# PO token plugin for yt-dlp; needs the bgutil server running (see README: YouTube Anti-Bot Setup)
 bgutil-ytdlp-pot-provider

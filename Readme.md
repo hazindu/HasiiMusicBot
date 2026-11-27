@@ -214,6 +214,10 @@ STRING_SESSION=
 
 # Essential
 COOKIE_URL=
+
+# YouTube anti-bot (optional, recommended - see "YouTube Anti-Bot Setup")
+YT_PROXY=
+POT_PROVIDER_URL=
 ```
 
 | Variable | Description |
@@ -226,6 +230,8 @@ COOKIE_URL=
 | `LOGGER_ID` | Group ID used for bot logs |
 | `STRING_SESSION` | Pyrogram String Session for the assistant account |
 | `COOKIE_URL` | YouTube cookies URL |
+| `YT_PROXY` | Proxy used for all yt-dlp traffic, e.g. `socks5://127.0.0.1:1080` (Cloudflare WARP) |
+| `POT_PROVIDER_URL` | URL of the bgutil PO token server, e.g. `http://127.0.0.1:4416` |
 
 ---
 
@@ -265,6 +271,80 @@ Start the bot.
 ```bash
 bash start
 ```
+
+---
+
+## YouTube Anti-Bot Setup
+
+YouTube often answers server IPs with *"Sign in to confirm you're not a bot"*. Cookies alone only help until the IP gets flagged again, so the bot supports two free helpers:
+
+- **PO token provider (bgutil)** generates the proof-of-origin tokens YouTube expects from yt-dlp.
+- **Cloudflare WARP** sends YouTube traffic through a Cloudflare IP instead of your flagged server IP.
+
+Both are optional. When `YT_PROXY` and `POT_PROVIDER_URL` are empty the bot behaves as before.
+
+### Docker Compose
+
+`docker-compose.yml` already starts both helpers and passes the right settings to the bot. No `.env` changes are needed. Do **not** put `127.0.0.1` values for these two variables in `.env` when using Compose; inside a container that address is the bot itself.
+
+### Running the bot without Compose (venv + tmux)
+
+Install Docker (only the helpers run in it).
+
+```bash
+curl -fsSL https://get.docker.com | sh
+```
+
+Start the helper containers. Both bind to `127.0.0.1` only, so they are not exposed to the internet, and `--restart unless-stopped` brings them back after a reboot.
+
+```bash
+docker run -d --name bgutil-provider --restart unless-stopped --init   -p 127.0.0.1:4416:4416 brainicism/bgutil-ytdlp-pot-provider:latest
+
+docker run -d --name warp --restart unless-stopped   --device-cgroup-rule 'c 10:200 rwm' -e WARP_SLEEP=2   --cap-add MKNOD --cap-add AUDIT_WRITE --cap-add NET_ADMIN   --sysctl net.ipv6.conf.all.disable_ipv6=0   --sysctl net.ipv4.conf.all.src_valid_mark=1   -v /root/warp-data:/var/lib/cloudflare-warp   -p 127.0.0.1:1080:1080 caomingjun/warp:latest
+```
+
+Check that both work (wait about 20 seconds after the first start).
+
+```bash
+curl -s -x socks5h://127.0.0.1:1080 https://www.cloudflare.com/cdn-cgi/trace | grep warp   # warp=on
+curl -s http://127.0.0.1:4416/ping                                                         # JSON reply
+```
+
+Add the settings to `.env`.
+
+```env
+YT_PROXY=socks5://127.0.0.1:1080
+POT_PROVIDER_URL=http://127.0.0.1:4416
+```
+
+Update the dependencies and start the bot. yt-dlp also needs Deno for YouTube.
+
+```bash
+pip install -U -r requirements.txt
+export PATH="$HOME/.deno/bin:$PATH"
+bash start
+```
+
+On startup the log should show `yt-dlp proxy enabled` and `PO token provider reachable`.
+
+### Starting the bot after a server reboot
+
+The helper containers restart on their own. Check them, then start the bot in tmux.
+
+```bash
+docker ps                      # warp and bgutil-provider should be Up
+tmux new -s HasiiMusic         # or: tmux attach-session -t HasiiMusic
+cd ~/HasiiMusicBot
+source hasiimusic/bin/activate
+export PATH="$HOME/.deno/bin:$PATH"
+bash start
+```
+
+Detach with `Ctrl+B`, then `D`. Do not re-run the `docker run` commands; the containers already exist (use `docker start warp bgutil-provider` if they are stopped).
+
+### Updating cookies without a restart
+
+Owners can replace the YouTube cookies while the bot is running (see `/cookies` under Owner Commands). Use cookies from a spare Google account, exported from a private window, and close that window without browsing further so they last longer.
 
 ---
 
@@ -359,6 +439,7 @@ docker compose restart
 | `/maintenance` | Enable or disable maintenance mode |
 | `/restart` | Restart the bot |
 | `/logs` | Retrieve the latest bot logs |
+| `/cookies` | Replace YouTube cookies without restarting: reply to a `.txt` file, pass a paste URL, re-download from `COOKIE_URL`, or use `/cookies status` |
 
 ---
 
