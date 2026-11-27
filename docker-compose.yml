@@ -34,7 +34,8 @@ services:
     image: caomingjun/warp:latest
     container_name: warp
     restart: unless-stopped
-    device_cgroup_rule: 'c 10:200 rwm'
+    device_cgroup_rules:
+      - 'c 10:200 rwm'
     environment:
       - WARP_SLEEP=2
     cap_add:

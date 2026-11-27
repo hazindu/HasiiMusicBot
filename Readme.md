@@ -295,19 +295,30 @@ Install Docker (only the helpers run in it).
 curl -fsSL https://get.docker.com | sh
 ```
 
-Start the helper containers. Both bind to `127.0.0.1` only, so they are not exposed to the internet, and `--restart unless-stopped` brings them back after a reboot.
+Start the helper containers. Both listen on `127.0.0.1` only, so they are not exposed to the internet, and `--restart unless-stopped` brings them back after a reboot.
 
 ```bash
-docker run -d --name bgutil-provider --restart unless-stopped --init   -p 127.0.0.1:4416:4416 brainicism/bgutil-ytdlp-pot-provider:latest
+docker run -d --name warp --restart unless-stopped \
+  --device-cgroup-rule 'c 10:200 rwm' -e WARP_SLEEP=2 \
+  --cap-add MKNOD --cap-add AUDIT_WRITE --cap-add NET_ADMIN \
+  --sysctl net.ipv6.conf.all.disable_ipv6=0 \
+  --sysctl net.ipv4.conf.all.src_valid_mark=1 \
+  -v /root/warp-data:/var/lib/cloudflare-warp \
+  -p 127.0.0.1:1080:1080 caomingjun/warp:latest
 
-docker run -d --name warp --restart unless-stopped   --device-cgroup-rule 'c 10:200 rwm' -e WARP_SLEEP=2   --cap-add MKNOD --cap-add AUDIT_WRITE --cap-add NET_ADMIN   --sysctl net.ipv6.conf.all.disable_ipv6=0   --sysctl net.ipv4.conf.all.src_valid_mark=1   -v /root/warp-data:/var/lib/cloudflare-warp   -p 127.0.0.1:1080:1080 caomingjun/warp:latest
+docker run -d --name bgutil-provider --restart unless-stopped --init --net=host \
+  brainicism/bgutil-ytdlp-pot-provider:latest --host 127.0.0.1
 ```
 
-Check that both work (wait about 20 seconds after the first start).
+> **Why `--net=host` for bgutil:** the bot passes its proxy (`socks5://127.0.0.1:1080`) to the PO token server, which uses it for its own requests to YouTube. In a normal container `127.0.0.1` is the container itself, so token generation fails. With the host network, `127.0.0.1:1080` reaches WARP, and `--host 127.0.0.1` keeps port 4416 private.
+
+Check that both work (wait about 20 seconds after the first start). The last command asks for a real PO token through WARP and should print JSON with a `poToken` field.
 
 ```bash
 curl -s -x socks5h://127.0.0.1:1080 https://www.cloudflare.com/cdn-cgi/trace | grep warp   # warp=on
 curl -s http://127.0.0.1:4416/ping                                                         # JSON reply
+curl -s -X POST http://127.0.0.1:4416/get_pot -H 'Content-Type: application/json' \
+  -d '{"proxy":"socks5://127.0.0.1:1080"}'                                                  # {"poToken":...}
 ```
 
 Add the settings to `.env`.
@@ -325,7 +336,7 @@ export PATH="$HOME/.deno/bin:$PATH"
 bash start
 ```
 
-On startup the log should show `yt-dlp proxy enabled` and `PO token provider reachable`.
+On startup the log should show `yt-dlp proxy enabled` and, a few seconds later, `PO token provider working (test token generated)`. yt-dlp warnings about PO tokens, cookies or the proxy also appear in the log, which shows why a download was blocked.
 
 ### Starting the bot after a server reboot
 

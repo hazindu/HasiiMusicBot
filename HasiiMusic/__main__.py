@@ -25,6 +25,7 @@ if sys.platform != "win32":
 from HasiiMusic import (tune, app, config, db,
                    configure_asyncio_exception_handler, logger, stop, userbot, yt)
 from HasiiMusic.plugins import all_modules
+from HasiiMusic.core.youtube.network import check_pot_provider, mask_proxy
 
 
 async def main():
@@ -58,23 +59,12 @@ async def main():
             except Exception as e:
                 logger.error(f"Failed to download cookies: {e}")
 
-        # Report YouTube anti-bot setup (proxy + PO token provider)
+        # Report YouTube anti-bot setup (proxy + PO token provider).
+        # The token test takes a few seconds, so it runs in the background;
+        # keep a reference so the task isn't garbage-collected.
         if config.YT_PROXY:
-            logger.info(f"🌐 yt-dlp proxy enabled: {config.YT_PROXY}")
-        if config.POT_PROVIDER_URL:
-            try:
-                import aiohttp
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(
-                        config.POT_PROVIDER_URL.rstrip("/") + "/ping",
-                        timeout=aiohttp.ClientTimeout(total=5),
-                    ) as resp:
-                        if resp.status == 200:
-                            logger.info("🛡️ PO token provider reachable.")
-                        else:
-                            logger.warning(f"⚠️ PO token provider returned HTTP {resp.status}")
-            except Exception as e:
-                logger.warning(f"⚠️ PO token provider not reachable at {config.POT_PROVIDER_URL}: {e}")
+            logger.info(f"🌐 yt-dlp proxy enabled: {mask_proxy(config.YT_PROXY)}")
+        pot_check = asyncio.create_task(check_pot_provider())
 
         # Load sudoers and blacklisted users
         sudoers = await db.get_sudoers()
